@@ -1,0 +1,111 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: flask-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - flask-network
+
+  mysql:
+    image: mysql:8.0
+    container_name: flask-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: flask_api
+      MYSQL_USER: flask_user
+      MYSQL_PASSWORD: flask_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - flask-network
+
+  web:
+    build: .
+    container_name: flask-web
+    ports:
+      - "5000:5000"
+    environment:
+      - DATABASE_URL=mysql+pymysql://flask_user:flask_password@mysql/flask_api
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    volumes:
+      - .:/app
+    depends_on:
+      - redis
+      - mysql
+    networks:
+      - flask-network
+
+  celery-worker:
+    build: .
+    container_name: flask-celery-worker
+    command: celery -A celery_worker.celery worker --loglevel=info
+    environment:
+      - DATABASE_URL=mysql+pymysql://flask_user:flask_password@mysql/flask_api
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    volumes:
+      - .:/app
+    depends_on:
+      - redis
+      - mysql
+      - web
+    networks:
+      - flask-network
+
+  celery-beat:
+    build: .
+    container_name: flask-celery-beat
+    command: celery -A celery_worker.celery beat --loglevel=info  # 修正这里
+    environment:
+      - DATABASE_URL=mysql+pymysql://flask_user:flask_password@mysql/flask_api
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    volumes:
+      - .:/app
+    depends_on:
+      - redis
+      - mysql
+      - web
+    networks:
+      - flask-network
+
+  flower:
+    build: .
+    container_name: flask-flower
+    command: celery -A celery_worker.celery flower --port=5555
+    ports:
+      - "5555:5555"
+    environment:
+      - DATABASE_URL=mysql+pymysql://flask_user:flask_password@mysql/flask_api
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    volumes:
+      - .:/app
+    depends_on:
+      - redis
+      - mysql
+      - web
+      - celery-worker
+    networks:
+      - flask-network
+
+volumes:
+  redis-data:
+  mysql-data:
+
+networks:
+  flask-network:
+    driver: bridge
