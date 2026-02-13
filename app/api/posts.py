@@ -111,11 +111,11 @@ def update_post(form, post_id):
     post = Post.query.get(post_id)
     
     if not post:
-        return jsonify({'error': '文章不存在', 'code': 404}), 404
+        return error_response(404, '文章不存在')
     
     # 检查权限
     if post.user_id != current_user_id:
-        return jsonify({'error': '没有权限修改此文章', 'code': 403}), 403
+        return error_response(403, '没有权限修改此文章')
     
     # 更新字段
     if form.title.data:
