@@ -7,6 +7,7 @@ from app.utils.jwt_util import generate_tokens
 from app.utils.decorators import validate_form
 from app.utils.cache import ModelCache, clear_cache_by_prefix
 from app.tasks.email_tasks import send_welcome_email
+from app.utils.response import success_response, error_response
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -29,14 +30,14 @@ def register(form):
     # 异步发送欢迎邮件
     send_welcome_email.delay(user.id, user.email, user.username)
     
-    return jsonify({
-        'message': '注册成功',
-        'code': 201,
-        'data': {
+    data =  {
             'user': user.to_dict(),
             **tokens
         }
-    }), 201
+
+    return success_response(data)
+
+
 
 @auth_bp.route('/login', methods=['POST'])
 @validate_form(LoginForm)
@@ -45,65 +46,55 @@ def login(form):
     user = User.query.filter_by(username=form.username.data).first()
     
     if not user or not user.check_password(form.password.data):
-        return jsonify({'error': '用户名或密码错误', 'code': 401}), 401
+        return error_response(401, '用户名或密码错误')
     
     # 生成令牌
     tokens = generate_tokens(user.id, user.username)
-    
-    return jsonify({
-        'message': '登录成功',
-        'code': 200,
-        'data': {
+    data = {
             'user': user.to_dict(),
             **tokens
         }
-    }), 200
+
+    return success_response(data)
 
 @auth_bp.route('/refresh', methods=['POST'])
 @jwt_required(refresh=True)
 def refresh():
     """刷新访问令牌"""
     current_user_id = get_jwt_identity()
+    current_user_id = int(current_user_id)  # 将字符串转换回整数
     user = User.query.get(current_user_id)
     
     if not user:
         return jsonify({'error': '用户不存在', 'code': 401}), 401
     
     access_token = create_access_token(
-        identity=current_user_id,
+        identity=str(current_user_id),  # 确保identity是字符串
         additional_claims={'username': user.username}
     )
     
-    return jsonify({
-        'message': '令牌刷新成功',
-        'code': 200,
-        'data': {
-            'access_token': access_token,
-            'token_type': 'Bearer'
-        }
-    }), 200
+    return success_response({
+        'access_token': access_token,
+        'token_type': 'Bearer'
+    })
 
 @auth_bp.route('/logout', methods=['POST'])
 @jwt_required()
 def logout():
     """用户注销（客户端需要删除token，服务端可选地将token加入黑名单）"""
     # 这里可以实现JWT黑名单功能
-    return jsonify({
-        'message': '注销成功',
-        'code': 200
-    }), 200
+    return success_response()
 
 @auth_bp.route('/me', methods=['GET'])
 @jwt_required()
 def get_profile():
     """获取当前用户信息"""
     current_user_id = get_jwt_identity()
+    current_user_id = int(current_user_id)  # 将字符串转换回整数
     user = User.query.get(current_user_id)
     
     if not user:
-        return jsonify({'error': '用户不存在', 'code': 404}), 404
+        return error_response(404, '用户不存在')
     
-    return jsonify({
-        'code': 200,
-        'data': user.to_dict()
-    }), 200
+    data = user.to_dict()
+    return success_response(data)

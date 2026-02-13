@@ -4,13 +4,13 @@ from datetime import timedelta
 def generate_tokens(user_id, username):
     """生成访问令牌和刷新令牌"""
     access_token = create_access_token(
-        identity=user_id,
+        identity=str(user_id),  # 确保identity是字符串
         additional_claims={'username': username},
         expires_delta=timedelta(hours=1)
     )
     
     refresh_token = create_refresh_token(
-        identity=user_id,
+        identity=str(user_id),  # 确保identity是字符串
         expires_delta=timedelta(days=30)
     )
     

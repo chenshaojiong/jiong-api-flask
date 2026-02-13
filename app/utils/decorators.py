@@ -10,13 +10,19 @@ def login_required(f):
     def decorated_function(*args, **kwargs):
         print(f"Authorization Header: {request.headers.get('Authorization', 'None')}")
         print(f'JWT_SECRET_KEY: {os.getenv("JWT_SECRET_KEY", "DefaultSecretKey")}')
-        verify_jwt_in_request()
-        current_user_id = get_jwt_identity()
-        print(f"Current User ID: {current_user_id}")
-        user = User.query.get(current_user_id)
-        if not user:
-            return jsonify({'error': '用户不存在', 'code': 401}), 401
-        return f(*args, **kwargs)
+        try:
+            verify_jwt_in_request()
+            current_user_id = get_jwt_identity()
+            print(f"Current User ID: {current_user_id}")
+            # 将字符串转换回整数
+            current_user_id = int(current_user_id)
+            user = User.query.get(current_user_id)
+            if not user:
+                return jsonify({'error': '用户不存在', 'code': 401}), 401
+            return f(*args, **kwargs)
+        except Exception as e:
+            print(f"JWT验证错误: {str(e)}")
+            return jsonify({'error': f'JWT验证错误: {str(e)}', 'code': 401}), 401
     return decorated_function
 
 def validate_form(form_class):
