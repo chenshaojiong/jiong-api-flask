@@ -10,6 +10,8 @@ python-dotenv==1.0.0
 
 # 数据库 - 使用 PyMySQL（Python 3.12 兼容）
 PyMySQL==1.1.0
+# 支持 MySQL 密码认证方法
+cryptography==42.0.5
 
 # Redis - 必须升级到 5.0.1+，但推荐最新版
 redis==5.0.8
