@@ -7,6 +7,7 @@ from app.schemas.post import PostForm, PostUpdateForm, PaginationForm
 from app.utils.decorators import validate_form, login_required
 from app.utils.cache import cache_response, ModelCache, clear_cache_by_prefix
 from app.tasks.email_tasks import send_post_notification
+from app.utils.response import success_response, fail_response, error_response, page_response
 
 posts_bp = Blueprint('posts', __name__)
 
@@ -16,6 +17,7 @@ posts_bp = Blueprint('posts', __name__)
 def create_post(form):
     """创建文章"""
     current_user_id = get_jwt_identity()
+    current_user_id = int(current_user_id)  # 将字符串转换回整数
     user = User.query.get(current_user_id)
     
     post = Post(
@@ -41,11 +43,7 @@ def create_post(form):
             post.id
         )
     
-    return jsonify({
-        'message': '文章创建成功',
-        'code': 201,
-        'data': post.to_dict()
-    }), 201
+    return success_response(post.to_dict())
 
 @posts_bp.route('', methods=['GET'])
 @cache_response(timeout=60, key_prefix='posts_list')
@@ -69,17 +67,11 @@ def get_posts(form):
     # 缓存单个文章
     for post in posts:
         ModelCache.cache_model('post', post.id, post.to_dict(), timeout=3600)
+
+
+    items = [post.to_dict() for post in posts]
     
-    return jsonify({
-        'code': 200,
-        'data': {
-            'items': [post.to_dict() for post in posts],
-            'total': total,
-            'page': page,
-            'per_page': per_page,
-            'pages': pagination.pages
-        }
-    }), 200
+    return page_response(page, per_page, total, pagination.pages, items)
 
 @posts_bp.route('/<int:post_id>', methods=['GET'])
 def get_post(post_id):
@@ -104,7 +96,7 @@ def get_post(post_id):
     ModelCache.cache_model('post', post_id, post_dict, timeout=3600)
     
     return jsonify({
-        'code': 200,
+        'code': 0,
         'data': post_dict,
         'cached': False
     }), 200
@@ -115,6 +107,7 @@ def get_post(post_id):
 def update_post(form, post_id):
     """更新文章"""
     current_user_id = get_jwt_identity()
+    current_user_id = int(current_user_id)  # 将字符串转换回整数
     post = Post.query.get(post_id)
     
     if not post:
@@ -136,25 +129,22 @@ def update_post(form, post_id):
     ModelCache.clear_model_cache('post', post_id)
     clear_cache_by_prefix('posts_list')
     
-    return jsonify({
-        'message': '文章更新成功',
-        'code': 200,
-        'data': post.to_dict()
-    }), 200
+    return success_response(post.to_dict())
 
 @posts_bp.route('/<int:post_id>', methods=['DELETE'])
 @login_required
 def delete_post(post_id):
     """删除文章"""
     current_user_id = get_jwt_identity()
+    current_user_id = int(current_user_id)  # 将字符串转换回整数
     post = Post.query.get(post_id)
     
     if not post:
-        return jsonify({'error': '文章不存在', 'code': 404}), 404
+        return error_response(404, '文章不存在')
     
     # 检查权限
     if post.user_id != current_user_id:
-        return jsonify({'error': '没有权限删除此文章', 'code': 403}), 403
+        return error_response(403, '没有权限删除此文章')
     
     db.session.delete(post)
     db.session.commit()
@@ -163,7 +153,4 @@ def delete_post(post_id):
     ModelCache.clear_model_cache('post', post_id)
     clear_cache_by_prefix('posts_list')
     
-    return jsonify({
-        'message': '文章删除成功',
-        'code': 200
-    }), 200
+    return success_response()
